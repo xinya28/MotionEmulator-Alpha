@@ -1,4 +1,4 @@
-﻿package com.zhufucdev.me.plugin
+package com.zhufucdev.me.plugin
 
 import android.util.Log
 import com.zhufucdev.me.stub.AgentState
@@ -199,9 +199,6 @@ suspend fun WsServer.connect(id: String, block: suspend ServerScope.() -> Unit):
             }
         )
     }
-
-    }
-
 
     return object : ServerConnection {
         override val successful: Boolean = true
