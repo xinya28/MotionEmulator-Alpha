@@ -35,8 +35,8 @@ android {
 }
 
 dependencies {
-    // Xposed
-    implementation(libs.yukihook)
+    // Modern Xposed API, provided by the framework at runtime
+    compileOnly(libs.libxposed)
     // Internal
     implementation(project(":stub"))
     implementation(project(":plugin"))

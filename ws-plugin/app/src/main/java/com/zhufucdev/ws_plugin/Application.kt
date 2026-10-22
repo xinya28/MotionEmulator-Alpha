@@ -1,5 +1,5 @@
 package com.zhufucdev.ws_plugin
 
-import com.highcapable.yukihookapi.hook.xposed.application.ModuleApplication
+import android.app.Application as AndroidApplication
 
-class Application : ModuleApplication()
+class Application : AndroidApplication()

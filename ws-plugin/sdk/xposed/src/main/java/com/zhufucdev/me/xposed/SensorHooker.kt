@@ -6,40 +6,51 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Handler
 import android.os.SystemClock
-import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
-import com.highcapable.yukihookapi.hook.factory.classOf
-import com.highcapable.yukihookapi.hook.factory.method
-import com.highcapable.yukihookapi.hook.param.HookParam
-import com.highcapable.yukihookapi.hook.type.java.BooleanType
-import com.highcapable.yukihookapi.hook.type.java.IntType
-import com.highcapable.yukihookapi.hook.type.java.UnitType
 import com.zhufucdev.me.stub.MotionMoment
 import com.zhufucdev.me.stub.Toggle
 import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
 
-class SensorHooker(private val scheduler: XposedScheduler) : YukiBaseHooker() {
+class SensorHooker(scheduler: XposedScheduler) : BaseHooker(scheduler) {
     private val listeners = mutableSetOf<SensorListener>()
 
     var toggle = Toggle.PRESENT
 
-    override fun onHook() {
-        classOf<SensorManager>().apply {
-            hookRegisterMethod(
-                classOf<SensorEventListener>(),
-                classOf<Sensor>(),
-                IntType,
-                classOf<Handler>()
-            )
-            hookRegisterMethod(classOf<SensorEventListener>(), classOf<Sensor>(), IntType)
-            hookRegisterMethod(classOf<SensorEventListener>(), classOf<Sensor>(), IntType, IntType)
-            hookRegisterMethod(
-                classOf<SensorEventListener>(), classOf<Sensor>(),
-                IntType, IntType, classOf<Handler>()
-            )
-            hookUnregisterMethod(classOf<SensorEventListener>(), classOf<Sensor>())
-            hookUnregisterMethod(classOf<SensorEventListener>())
-        }
+    fun hook() {
+        SensorManager::class.java.methodsNamed("registerListener")
+            .filter { it.parameterTypes.firstOrNull() == SensorEventListener::class.java }
+            .forEach { method ->
+                hookReplace(method) { args ->
+                    if (!scheduler.isWorking || toggle == Toggle.NONE) {
+                        return@hookReplace args.proceed()
+                    }
+                    if (toggle == Toggle.BLOCK) {
+                        return@hookReplace false
+                    }
+                    redirectToFakeHandler(args)
+                }
+            }
+
+        SensorManager::class.java.methodsNamed("unregisterListener")
+            .filter { it.parameterTypes.firstOrNull() == SensorEventListener::class.java }
+            .forEach { method ->
+                hookUnit(method) { args ->
+                    if (!scheduler.isWorking || toggle == Toggle.NONE) {
+                        args.proceed()
+                        return@hookUnit
+                    }
+                    if (toggle == Toggle.BLOCK) {
+                        return@hookUnit
+                    }
+                    val listener = args.cast<SensorEventListener>(0) ?: return@hookUnit
+                    val sensor = if (args.size > 1) args.cast<Sensor>(1) else null
+                    if (sensor == null) {
+                        listeners.removeAll { it.listener == listener }
+                    } else {
+                        listeners.removeAll { it.listener == listener && it.type == sensor.type }
+                    }
+                }
+            }
     }
 
     suspend fun raise(moment: MotionMoment) {
@@ -81,52 +92,10 @@ class SensorHooker(private val scheduler: XposedScheduler) : YukiBaseHooker() {
         }
     }
 
-    private fun Class<SensorManager>.hookRegisterMethod(vararg paramType: Any) {
-        method {
-            name = "registerListener"
-            param(*paramType)
-            returnType = BooleanType
-        }
-            .hook {
-                replaceAny {
-                    if (!scheduler.isWorking || toggle == Toggle.NONE)
-                        return@replaceAny callOriginal()
-                    if (toggle == Toggle.BLOCK)
-                        return@replaceAny false
-                    redirectToFakeHandler()
-                }
-            }
-    }
-
-    private fun Class<SensorManager>.hookUnregisterMethod(vararg paramType: Any) {
-        method {
-            name = "unregisterListener"
-            param(*paramType)
-            returnType = UnitType
-        }.hook {
-            replaceUnit {
-                if (!scheduler.isWorking || toggle == Toggle.NONE) {
-                    callOriginal()
-                    return@replaceUnit
-                }
-                if (toggle == Toggle.BLOCK) {
-                    return@replaceUnit
-                }
-                val listener = args(0).cast<SensorEventListener>()
-                val sensor = args.takeIf { it.size > 1 }?.let { it[1] as? Sensor }
-                if (sensor == null) {
-                    listeners.removeAll { it.listener == listener }
-                } else {
-                    listeners.removeAll { it.listener == listener && it.type == sensor.type }
-                }
-            }
-        }
-    }
-
-    private fun HookParam.redirectToFakeHandler(): Boolean {
-        val type = args(1).cast<Sensor>()?.type ?: return false
-        val listener = args(0).cast<SensorEventListener>() ?: return false
-        val handler = args.lastOrNull() as? Handler
+    private fun redirectToFakeHandler(args: HookArgs): Boolean {
+        val listener = args.cast<SensorEventListener>(0) ?: return false
+        val type = args.cast<Sensor>(1)?.type ?: return false
+        val handler = args.args.lastOrNull() as? Handler
         listeners.add(SensorListener(type, listener, handler))
         return true
     }

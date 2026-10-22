@@ -1,12 +1,12 @@
 package com.zhufucdev.ws_plugin.hook
 
-import com.highcapable.yukihookapi.hook.log.loggerI
-import com.highcapable.yukihookapi.hook.param.PackageParam
-import com.zhufucdev.me.stub.Method
+import android.util.Log
 import com.zhufucdev.me.plugin.WsServer
 import com.zhufucdev.me.plugin.connect
-import com.zhufucdev.me.xposed.XposedScheduler
+import com.zhufucdev.me.stub.Method
 import com.zhufucdev.me.xposed.PREFERENCE_NAME_BRIDGE
+import com.zhufucdev.me.xposed.XposedScheduler
+import io.github.libxposed.api.XposedModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -16,14 +16,23 @@ import kotlin.time.Duration.Companion.seconds
 class Scheduler : XposedScheduler() {
     companion object {
         private const val TAG = "Scheduler"
+        private const val DEFAULT_PORT = 20230
+        private const val DEFAULT_METHOD = "xposed_only"
     }
-    private lateinit var server: WsServer
 
-    override fun PackageParam.initialize() {
-        val prefs = prefs(PREFERENCE_NAME_BRIDGE)
+    override val tag: String get() = TAG
+
+    private lateinit var server: WsServer
+    private val bridge by lazy { BridgePrefs(module) }
+
+    override fun resolveHookingMethod(): Method = runCatching {
+        Method.valueOf(bridge.getString("me_method", DEFAULT_METHOD).uppercase())
+    }.getOrDefault(Method.XPOSED_ONLY)
+
+    override fun initialize() {
         server = WsServer(
-            port = prefs.getInt("me_server_port", 20230),
-            useTls = prefs.getBoolean("me_server_tls", true)
+            port = bridge.getInt("me_server_port", DEFAULT_PORT),
+            useTls = bridge.getBoolean("me_server_tls", true)
         )
 
         val scope = CoroutineScope(Dispatchers.IO)
@@ -32,28 +41,47 @@ class Scheduler : XposedScheduler() {
         }
     }
 
-    override fun PackageParam.getHookingMethod(): Method =
-        prefs(PREFERENCE_NAME_BRIDGE).getString("me_method", "xposed_only").let {
-            Method.valueOf(it.uppercase())
-        }
-
     private suspend fun startServer() {
         var warned = false
 
         while (true) {
-            server.connect(id) {
-                if (emulation.isPresent)
-                    startEmulation(emulation.get())
+            runCatching {
+                server.connect(id) {
+                    if (emulation.isPresent)
+                        startEmulation(emulation.get())
+                }
+            }.onFailure {
+                runCatching { module.log(Log.WARN, TAG, "Data channel failure", it) }
             }
 
             if (!warned) {
-                loggerI(
-                    tag = TAG,
-                    msg = "Provider offline. Waiting for data channel to become online"
-                )
+                runCatching {
+                    module.log(Log.INFO, TAG, "Provider offline. Waiting for data channel to become online")
+                }
                 warned = true
             }
             delay(1.seconds)
         }
     }
+}
+
+/**
+ * Bridge settings published by the module app.
+ *
+ * API 102 exposes remote preferences to hooked processes through [XposedModule.getRemotePreferences];
+ * when the framework does not provide them (or nothing was published yet) the previous defaults
+ * are used, which matches the legacy module's behaviour for untouched configurations.
+ */
+class BridgePrefs(private val module: XposedModule) {
+    private val remote by lazy {
+        runCatching { module.getRemotePreferences(PREFERENCE_NAME_BRIDGE) }.getOrNull()
+    }
+
+    fun getInt(key: String, def: Int): Int = runCatching { remote?.getInt(key, def) }.getOrNull() ?: def
+
+    fun getBoolean(key: String, def: Boolean): Boolean =
+        runCatching { remote?.getBoolean(key, def) }.getOrNull() ?: def
+
+    fun getString(key: String, def: String): String =
+        runCatching { remote?.getString(key, def) }.getOrNull() ?: def
 }
