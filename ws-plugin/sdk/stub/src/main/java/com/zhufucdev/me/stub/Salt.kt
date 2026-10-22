@@ -345,6 +345,7 @@ class Salt2dRuntime(val data: Salt2dData) {
             commitTranslations()
             commit()
         }
+    }
 }
 
 fun Salt2dData.runtime() = Salt2dRuntime(this)
