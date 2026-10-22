@@ -1,0 +1,106 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'manager-stub/**'
+      - 'manager-update/**'
+      - 'buildSrc/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/build-apk.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'manager-stub/**'
+      - 'manager-update/**'
+      - 'buildSrc/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manager:
+    name: Manager app (debug + release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build manager APKs
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:assembleRelease
+
+      - name: Collect APKs
+        run: |
+          mkdir -p artifacts/manager
+          find app/build/outputs/apk -name '*.apk' -exec cp -v {} artifacts/manager/ \;
+          ls -lh artifacts/manager
+
+      - name: Upload manager APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-emulator-manager-apk
+          path: artifacts/manager/*.apk
+          if-no-files-found: error
+
+  websocket-plugin:
+    name: WebSocket plugin (debug + release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build plugin APKs
+        working-directory: ws-plugin
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:assembleRelease
+
+      - name: Collect APKs
+        working-directory: ws-plugin
+        run: |
+          mkdir -p ../artifacts/plugin
+          find app/build/outputs/apk -name '*.apk' -exec cp -v {} ../artifacts/plugin/ \;
+          ls -lh ../artifacts/plugin
+
+      - name: Upload plugin APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-emulator-websocket-plugin-apk
+          path: artifacts/plugin/*.apk
+          if-no-files-found: error
