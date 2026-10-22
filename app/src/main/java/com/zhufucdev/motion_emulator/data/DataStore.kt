@@ -16,6 +16,9 @@ import java.io.File
 @OptIn(ExperimentalSerializationApi::class)
 abstract class DataStore<T : Data> {
     private val data = sortedMapOf<String, T>()
+
+    /** Last-modified stamp of the file each cached record was read from. */
+    private val stamps = mutableMapOf<String, Long>()
     private lateinit var rootDir: File
 
     abstract val typeName: String
@@ -26,7 +29,9 @@ abstract class DataStore<T : Data> {
     /**
      * Make sure it works
      *
-     * Should be called before any I/O operation
+     * Should be called before any I/O operation. Records whose file changed on disk (edits,
+     * imports, restores done while this process was alive) are re-read instead of being served
+     * from the in-memory cache, so an emulation never replays stale path data.
      */
     fun require(context: Context) {
         rootDir = context.filesDir
@@ -34,6 +39,7 @@ abstract class DataStore<T : Data> {
         val files = rootDir.list()
         if (files == null) {
             data.clear()
+            stamps.clear()
         } else {
             val existingIds = mutableListOf<String>()
             files.forEach {
@@ -42,18 +48,21 @@ abstract class DataStore<T : Data> {
                     return@forEach
                 val id = file.nameWithoutExtension.removePrefix("${typeName}_")
                 existingIds.add(id)
-                if (data.containsKey(id)) {
+                val stamp = file.lastModified()
+                if (data.containsKey(id) && stamps[id] == stamp) {
                     return@forEach
                 }
 
                 file.inputStream().use { s ->
                     val record = Json.decodeFromStream(dataSerializer, s)
                     data[record.id] = record
+                    stamps[record.id] = stamp
                 }
             }
             val removed = data.keys.filter { it !in existingIds }
             removed.forEach {
                 data.remove(it)
+                stamps.remove(it)
             }
         }
     }
@@ -61,24 +70,29 @@ abstract class DataStore<T : Data> {
     fun store(record: T, overwrite: Boolean = false) {
         if (data.containsKey(record.id) && !overwrite) return
 
-        File(rootDir, record.storeName).outputStream().use {
+        val file = File(rootDir, record.storeName)
+        file.outputStream().use {
             record.writeTo(it)
         }
         data[record.id] = record
+        stamps[record.id] = file.lastModified()
     }
 
     fun parseAndStore(string: String, overwrite: Boolean = false): T {
         val record = Json.decodeFromString(dataSerializer, string)
         if (data.containsKey(record.id) && !overwrite) return record
 
-        File(rootDir, record.storeName).writeText(string)
+        val file = File(rootDir, record.storeName)
+        file.writeText(string)
         data[record.id] = record
+        stamps[record.id] = file.lastModified()
         return record
     }
 
     fun delete(record: T, context: Context) {
         context.deleteFile(record.storeName)
         data.remove(record.id)
+        stamps.remove(record.id)
     }
 
     fun list() = data.values.toList()

@@ -136,6 +136,12 @@ abstract class XposedScheduler : AbstractScheduler() {
     }
 
     override suspend fun ServerScope.startTraceEmulation(trace: Trace) {
+        // A route with fewer than two points cannot be interpolated: at()/length() would throw
+        // or return NaN and the emulation would be reported as failed. Treat it as a no-op.
+        if (trace.points.size < 2) {
+            locationHooker.resetSpeed()
+            return
+        }
         locationHooker.resetSpeed()
         try {
             val salted = trace.generateSaltedTrace()

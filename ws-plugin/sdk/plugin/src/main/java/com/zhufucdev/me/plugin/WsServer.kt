@@ -1,4 +1,4 @@
-package com.zhufucdev.me.plugin
+﻿package com.zhufucdev.me.plugin
 
 import android.util.Log
 import com.zhufucdev.me.stub.AgentState
@@ -28,6 +28,7 @@ import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
 import io.ktor.websocket.send
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
@@ -133,6 +134,18 @@ suspend fun WsServer.connect(id: String, block: suspend ServerScope.() -> Unit):
     } else {
         val emulation = currentEmu.getOrNull()!!.body<Emulation>()
 
+        // The manager may have replaced the route since this connection was opened (or the
+        // route may have been edited/imported after the plugin cached it). Fetch it again on
+        // every worker start so a long-lived connection never replays stale path data.
+        suspend fun fetchCurrent(): Emulation? = runCatching {
+            client.get {
+                urlTo(this@connect) {
+                    protocol = if (useTls) URLProtocol.HTTPS else URLProtocol.HTTP
+                    path("current")
+                }
+            }.body<Emulation>()
+        }.getOrNull()
+
         client.webSocket(
             request = {
                 urlTo(this@connect) {
@@ -142,7 +155,7 @@ suspend fun WsServer.connect(id: String, block: suspend ServerScope.() -> Unit):
             },
             block = {
                 try {
-                    var worker = launchWorker(emulation, block)
+                    var worker = launchWorker(emulation, block, { fetchCurrent() })
                     while (true) {
                         when (val state = receiveCommand()) {
                             AgentState.CANCELED -> {
@@ -158,7 +171,7 @@ suspend fun WsServer.connect(id: String, block: suspend ServerScope.() -> Unit):
                                     worker.resume()
                                 } else {
                                     if (!worker.isCancelled) worker.cancelAndJoin()
-                                    worker = launchWorker(emulation, block)
+                                    worker = launchWorker(emulation, block, { fetchCurrent() })
                                 }
                             }
 
@@ -187,6 +200,8 @@ suspend fun WsServer.connect(id: String, block: suspend ServerScope.() -> Unit):
         )
     }
 
+    }
+
 
     return object : ServerConnection {
         override val successful: Boolean = true
@@ -202,9 +217,13 @@ private suspend fun WebSocketSession.receiveCommand(): AgentState {
 }
 
 private fun DefaultClientWebSocketSession.launchWorker(
-    emulation: Emulation,
-    block: suspend (ServerScope) -> Unit
+    fallback: Emulation,
+    block: suspend (ServerScope) -> Unit,
+    fetch: suspend () -> Emulation? = { null },
 ): PausingJob = launchPausing {
+    // Re-read the current emulation on every (re)start. Replaying the snapshot captured when
+    // the connection was opened is what made edited/refreshed routes look "stuck" on old data.
+    val emulation = fetch() ?: fallback
     val context = currentCoroutineContext()
     val scope = object : ServerScope {
         private var started = false
@@ -231,6 +250,9 @@ private fun DefaultClientWebSocketSession.launchWorker(
     try {
         block.invoke(scope)
         send(byteArrayOf(0x7f)) // this is signal completion
+    } catch (e: CancellationException) {
+        // Pausing/restarting cancels the worker; that is not a failed emulation.
+        throw e
     } catch (e: Exception) {
         send(byteArrayOf(-0x7f)) // this is signal failure
         Log.w("WsServer", "Worker finished exceptionally", e)

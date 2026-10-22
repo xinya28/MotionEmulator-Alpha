@@ -38,11 +38,23 @@ abstract class AbstractScheduler {
 
     private var loopStart = 0L
     val loopElapsed get() = SystemClock.elapsedRealtime() - loopStart
-    protected val loopProgress get() = (loopElapsed / duration / 1000).toFloat()
+    protected val loopProgress: Float
+        get() {
+            if (duration <= 0.0 || !duration.isFinite()) return Float.MAX_VALUE
+            val progress = (loopElapsed / duration / 1000).toFloat()
+            // Keep values above 1 so replay loops terminate, but never hand out NaN/Infinity.
+            return if (progress.isFinite()) progress.coerceAtLeast(0f) else Float.MAX_VALUE
+        }
 
     protected suspend fun ServerScope.startEmulation(emulation: Emulation) {
-        length = emulation.trace.length()
-        duration = length / emulation.velocity // in seconds
+        // A trace with fewer than two points has no length: length() would throw before
+        // sendStarted() and the manager would wait forever for an EmulationInfo. Degenerate
+        // traces (also produced when the manager serves a stale/empty route) are reported as
+        // a zero-length emulation instead of hanging or dividing by zero.
+        val points = emulation.trace.points
+        length = if (points.size >= 2) runCatching { emulation.trace.length() }.getOrDefault(0.0) else 0.0
+        if (!length.isFinite() || length < 0.0) length = 0.0
+        duration = if (emulation.velocity > 0.0 && length > 0.0) (length / emulation.velocity).coerceAtLeast(MIN_DURATION) else MIN_DURATION
         satellites = emulation.satelliteCount
 
         sendStarted(EmulationInfo(duration, length, packageName))
@@ -86,5 +98,12 @@ abstract class AbstractScheduler {
     }
 
     open suspend fun ServerScope.startCellEmulation(cells: Box<CellTimeline>) {
+    }
+
+    companion object {
+        /**
+         * Floor for one replay loop so a zero-length trace cannot turn into Inf/NaN progress.
+         */
+        private const val MIN_DURATION = 1e-3
     }
 }

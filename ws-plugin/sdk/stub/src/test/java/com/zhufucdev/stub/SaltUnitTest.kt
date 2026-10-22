@@ -169,4 +169,24 @@ class SaltUnitTest {
             assertEquals("far from center", dr, dp, 5.0)
         }
     }
+
+    @Test
+    fun salt_without_elements_is_a_no_op() {
+        // A trace saved while the editor kept a factor but no element (or an imported trace
+        // whose "elements" array is empty) used to hit elements.first() inside resolve() and
+        // throw NoSuchElementException, which surfaced as a failed emulation on every replay.
+        // Such a salt must behave exactly like no salt at all.
+        val trace = Trace(
+            id = "empty-salt",
+            name = "empty salt",
+            points = listOf(Point(-1.0, -1.0), Point(-1.0, 1.0)),
+            salt = Salt2dData(elements = emptyList(), factors = emptyList())
+        )
+
+        val salted = trace.generateSaltedTrace()
+
+        assertEquals(2, salted.size)
+        assertEquals(-1.0, salted[0].latitude, 1e-9)
+        assertEquals(1.0, salted[1].longitude, 1e-9)
+    }
 }

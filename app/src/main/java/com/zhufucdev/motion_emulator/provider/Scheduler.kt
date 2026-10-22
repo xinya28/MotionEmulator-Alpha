@@ -200,8 +200,15 @@ object Scheduler {
                     original.forEach { (id, _) ->
                         notifyStateChanged(id, AgentState.CANCELED)
                     }
+                    mState.clear()
+                } else {
+                    // A new route replaced the old one. Ask every agent that is still around to
+                    // restart, so it re-reads /current instead of replaying the emulation it
+                    // cached when it connected (stale path data used to survive until restart).
+                    val agents = (mInfo.keys + mState.keys).toSet()
+                    mState.clear()
+                    agents.forEach { notifyStateChanged(it, AgentState.PENDING) }
                 }
-                mState.clear()
             }
             mEmulation = value
         }

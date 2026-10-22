@@ -271,8 +271,12 @@ class Salt2dRuntime(val data: Salt2dData) {
      * what [Transformation]s should be taken
      * and what order they are in
      */
-    internal fun resolve(projector: Projector, parent: ClosedShape): List<Transformation> =
-        buildList {
+    internal fun resolve(projector: Projector, parent: ClosedShape): List<Transformation> {
+        // A trace that was saved while its salt had factors but no elements (or an imported
+        // trace whose "elements" array is empty) must not crash the emulation. Treat such a
+        // salt as a no-op instead of calling first() on an empty list.
+        if (data.elements.isEmpty()) return emptyList()
+        return buildList {
             var lastAnchor: Vector2D? = null
             val center by lazy { with(projector) { parent.center(projector).toIdeal() } }
             var lastType: SaltType = data.elements.first().type
