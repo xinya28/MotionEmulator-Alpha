@@ -25,7 +25,7 @@ class Scheduler : XposedScheduler() {
     private lateinit var server: WsServer
     private val bridge by lazy { BridgePrefs(module) }
 
-    override fun getHookingMethod(): Method = runCatching {
+    override fun resolveHookingMethod(): Method = runCatching {
         Method.valueOf(bridge.getString("me_method", DEFAULT_METHOD).uppercase())
     }.getOrDefault(Method.XPOSED_ONLY)
 

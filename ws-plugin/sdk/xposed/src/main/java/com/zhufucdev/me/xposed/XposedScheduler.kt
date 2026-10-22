@@ -61,7 +61,7 @@ abstract class XposedScheduler : AbstractScheduler() {
     /**
      * Invoked before installing hooks to decide which hook set applies.
      */
-    abstract fun getHookingMethod(): Method
+    abstract fun resolveHookingMethod(): Method
 
     /**
      * Installs every hooker for the package the module was just loaded into.
@@ -69,7 +69,7 @@ abstract class XposedScheduler : AbstractScheduler() {
     fun attach(module: XposedModule, param: XposedModuleInterface.PackageLoadedParam) {
         this.module = module
         this.packageParam = param
-        hookingMethod = getHookingMethod()
+        hookingMethod = resolveHookingMethod()
 
         if (!hookingMethod.involveXposed) {
             return
