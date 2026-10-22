@@ -1,51 +1,54 @@
 # MotionEmulator
 
-This fork includes a standalone [WebSocket plugin and local SDK](ws-plugin/README.md)
-fixing NaN speeds during multi-listener location dispatch. Build `ws-plugin/` to use
-the fix; rebuilding the manager application alone does not update the loaded plugin.
+本fork使用DeepSeek v4 Flash进行更新，仅为我个人使用，不保证安全性和隐私性，未来2年内不会审查（抽不出时间研究安卓开发），请大佬仔细辨别源码内容是否有异常
+
+## 更新内容
+从Xposed升级为LSPosed API102
+
+## 更新计划
+修复长时间使用一个路径时模拟失败的bug
+修复使用部分掺盐参数时模拟失败的bug
+添加日志输出
+同步hook列表
+增加miuix UI样式
+
+
+
 <img src="art/MotionEmulator.svg" width="200">
 
-English Version | [中文文档](README_zh.md)
+它支持多种方式，如Xposed和开发者选项。
 
-Motion Emulator is an application platform that allows 
-you to mock location and sensor data using different methods,
-including Xposed and debugging options.
+## 使用场景
 
-## Scenarios
+如果你是不幸的中国大学生，或许体验过 _校园跑_ 
 
-Trick your fitness app or your favourite game. Make you king of the world.
+尽管教职工总希望我们在夕阳下跑阳光长跑，我想做些有创造性的事情来让生活更轻松一点
 
-## Usage
+## 使用方法
+🚧🚧🚧施工中🚧🚧🚧
 
-To learn about the latest software and its tricks, refer to
-[Steve's Blog](https://zhufucdev.com/article/RTyhZArsyD2JKPbdHEviU).
+## 发布与构建
 
-## Releases and build
+[管理端 1.2.5（高德地图）与修复插件 1.2.3](https://github.com/SpringMomu/MotionEmulator/releases/tag/motionemulator-v1.2.5)
+已配套提供。管理端的插件下载与自身更新均使用本 fork。管理端以原作者稳定版 1.2.2 为基础，
+保留旧路线、配置和协议，并与插件直接共用 [SDK 1.0.0 源码](manager-stub/README.md)。
 
-[Manager 1.2.5 (AMap) and fixed plugin 1.2.4](https://github.com/SpringMomu/MotionEmulator/releases/tag/motionemulator-v1.2.5)
-are published together. The manager's download catalog and self-update use this fork.
-The manager uses the upstream **stable 1.2.2** UI/data baseline with the fixes applied;
-its [SDK models](manager-stub/README.md) are shared with the plugin.
+发布版默认使用 **高德地图**，绘制路径页面右上角菜单可切换普通地图、卫星地图和夜间地图。
+选中的图层会保存，并用于路线预览。从 1.2.4 升级时会切换到高德一次，之后保留用户自行选择。
+地点搜索和逆地理编码均使用 Android SDK Key，不再需要单独的 Web 服务 Key。
+Key 配置保存在本机，不提交 Git。
 
-The published manager defaults to **AMap**, with standard and satellite maps available
-from the drawing screen's top-right menu. The chosen map mode is remembered, including
-route previews. Upgrading from 1.2.4 selects AMap once; subsequent provider choices are
-respected. POI search and reverse geocoding use the Android SDK key; no Web Service
-key is needed. Android keys are configured locally and are not committed to Git.
+**OpenStreetMap** 仍保留在设置中，也是未配置高德 Key 时源码构建的默认地图。
+其地名搜索使用 Android 系统服务，并支持直接输入 `纬度, 经度`。
+已有 WGS84、GCJ-02 路线保持原存储坐标，在显示时按地图服务转换。
+OSM 无卫星图层，遵守 [OSM 瓦片使用政策](https://operations.osmfoundation.org/policies/tiles/)，
+显示版权归属，使用独立 User-Agent 和本地缓存，不提供批量离线下载。
 
-**OpenStreetMap** remains available in settings and is the default for source builds
-without an AMap key. Its geocoder is provided by Android, with `latitude, longitude`
-input as a fallback. Existing WGS84 and GCJ-02 routes retain their stored coordinates;
-providers convert coordinates for display. OSM has no satellite layer and follows the
-[OSM tile usage policy](https://operations.osmfoundation.org/policies/tiles/), including
-visible attribution, an app-specific User-Agent and local HTTP-aware caching.
-
-Use JDK 17 or 21, Android SDK 34 and the included Gradle 8.9 wrapper. Set `sdk.dir` in
-an ignored `local.properties`. Placeholder map keys in `local.defaults.properties`
-allow a working OSM build. Only configure your own `AMAP_SDK_KEY` and/or
-`GCP_MAPS_KEY` if you want those optional providers; Android keys must match your
-package and signing certificate. The optional `server_uri` supplies additional
-plugin catalog entries; leave it blank to use only this fork's catalog.
+构建使用 JDK 17 或 21、Android SDK 34 和仓库自带 Gradle 8.9。
+在不提交的 `local.properties` 中设置 `sdk.dir`，即可使用默认 OSM 配置构建。
+只有启用高德或 Google 时，才需要配置自己的 `AMAP_SDK_KEY`、`GCP_MAPS_KEY`；
+Android 地图 Key 必须与自己的包名和签名证书匹配。
+可选 `server_uri` 用于额外插件目录，留空时仅使用本 fork 的目录。
 
 ```shell
 ./gradlew :app:testDebugUnitTest :app:assembleRelease
@@ -53,21 +56,19 @@ cd ws-plugin
 ./gradlew :stub:testDebugUnitTest :xposed:testDebugUnitTest :app:assembleRelease
 ```
 
-The manager's universal unsigned APK is in `app/build/outputs/apk/release/`.
-Sign release APKs with your own persistent identity; never commit keys or passwords.
-Upstream-signed installations require a data-preserving migration because Android
-cannot overwrite them with this fork's certificate. Subsequent fork updates can be
-installed normally with the same fork certificate.
+管理端通用未签名 APK 位于 `app/build/outputs/apk/release/`。发布使用固定的自己的签名，
+不要提交签名密钥或密码。原作者签名的安装需要先妥善迁移数据，无法直接覆盖；
+之后本 fork 的同签名更新可以正常覆盖安装。
 
-Publishing: upload and verify the APK in a draft release first, update `release.json`
-with its package, version code, version name, final URL and SHA-256, push the matching
-source commit, then publish the release at that commit. Follow the analogous steps
-in [ws-plugin/README.md](ws-plugin/README.md) when changing the plugin.
+发布时先把 APK 上传到草稿 Release 并校验，随后将包名、版本号、versionCode、最终下载 URL
+及 SHA-256 写入根目录 `release.json`，推送源码后在对应提交发布 Release。
+插件清单位于 `ws-plugin/release.json`，维护步骤见 [插件说明](ws-plugin/README.md)。
 
-## License
+## 营业执照
 
 ```
 Copyright 2022-2023 zhufucdev
+Copyright(c) xinya28
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -82,6 +83,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## Special Thanks
+## 特别鸣谢
 
-- [wandergis/coordtransform](https://github.com/wandergis/coordtransform) for its map coordinate fixing algorithm
+- [wandergis/coordtransform](https://github.com/wandergis/coordtransform) 的地图坐标系转化算法
