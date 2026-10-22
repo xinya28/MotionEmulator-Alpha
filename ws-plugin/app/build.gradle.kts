@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
-    alias(libs.plugins.ksp)
 }
 
 android {
@@ -42,22 +41,10 @@ android {
 dependencies {
     implementation(libs.corektx)
     implementation(libs.kotlinx.coroutine)
-    ksp(libs.yukihook.ksp)
-    implementation(libs.yukihook)
-    compileOnly(libs.xposed)
+    compileOnly(libs.libxposed)
     // Build the fixed SDK sources in this repository, never the old Maven binaries.
     implementation(project(":stub"))
     implementation(project(":plugin"))
     implementation(project(":xposed"))
 }
 
-// YukiHook 1.2 writes its entry-point descriptors into src/main during KSP.
-// On a fresh checkout, merging assets before KSP silently produces an APK that
-// LSPosed cannot load. Order both descriptors' packaging after their generation.
-for (variant in listOf("Debug", "Release")) {
-    tasks.matching {
-        it.name == "merge${variant}Assets" || it.name == "process${variant}JavaRes"
-    }.configureEach {
-        dependsOn("ksp${variant}Kotlin")
-    }
-}

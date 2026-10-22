@@ -1,11 +1,11 @@
-@file:Suppress("unused")
+@file:Suppress("unused", "DEPRECATION")
 
 package com.zhufucdev.me.xposed
 
 import android.hardware.Sensor
 import com.aventrix.jnanoid.jnanoid.NanoIdUtils
-import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
-import com.highcapable.yukihookapi.hook.param.PackageParam
+import com.zhufucdev.me.plugin.AbstractScheduler
+import com.zhufucdev.me.plugin.ServerScope
 import com.zhufucdev.me.stub.Box
 import com.zhufucdev.me.stub.CellMoment
 import com.zhufucdev.me.stub.CellTimeline
@@ -19,16 +19,31 @@ import com.zhufucdev.me.stub.Trace
 import com.zhufucdev.me.stub.at
 import com.zhufucdev.me.stub.generateSaltedTrace
 import com.zhufucdev.me.stub.toPoint
-import com.zhufucdev.me.plugin.AbstractScheduler
-import com.zhufucdev.me.plugin.ServerScope
+import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Scheduler bound to a modern-API module generation.
+ *
+ * Hooks are installed in [attach], which the module entry point calls from
+ * `onPackageLoaded`; everything below is the same emulation logic the legacy module used.
+ */
 abstract class XposedScheduler : AbstractScheduler() {
+    lateinit var module: XposedModule
+        private set
+    lateinit var packageParam: XposedModuleInterface.PackageLoadedParam
+        private set
+
     override val packageName: String
-        get() = packageNameHooked ?: throw IllegalStateException("Not initialized")
-    private var packageNameHooked: String? = null
+        get() = if (::packageParam.isInitialized) packageParam.packageName
+        else throw IllegalStateException("Not initialized")
+
+    val classLoader: ClassLoader get() = packageParam.classLoader
+
+    open val tag: String get() = "MotionEmulator"
 
     val sensorHooker = SensorHooker(this)
     val locationHooker = LocationHooker(this)
@@ -39,36 +54,32 @@ abstract class XposedScheduler : AbstractScheduler() {
         private set
 
     /**
-     * Invoked after [getHookingMethod] returns a method with
-     * xposed involved
-     *
-     * @see [Method.involveXposed]
+     * Invoked after hooks are installed, for scheduler specific setup (server, prefs, ...).
      */
-    abstract fun PackageParam.initialize()
+    abstract fun initialize()
 
     /**
-     * Invoked right after the hook is loaded
+     * Invoked before installing hooks to decide which hook set applies.
      */
-    abstract fun PackageParam.getHookingMethod(): Method
+    abstract fun getHookingMethod(): Method
 
     /**
-     * To initialize the scheduler
+     * Installs every hooker for the package the module was just loaded into.
      */
-    val hook = object : YukiBaseHooker() {
-        override fun onHook() {
-            packageNameHooked = packageName
-            hookingMethod = getHookingMethod()
+    fun attach(module: XposedModule, param: XposedModuleInterface.PackageLoadedParam) {
+        this.module = module
+        this.packageParam = param
+        hookingMethod = getHookingMethod()
 
-            if (!hookingMethod.involveXposed) {
-                return
-            }
-
-            loadHooker(sensorHooker)
-            loadHooker(locationHooker)
-            loadHooker(cellHooker)
-
-            initialize()
+        if (!hookingMethod.involveXposed) {
+            return
         }
+
+        sensorHooker.hook()
+        locationHooker.hook()
+        cellHooker.hook()
+
+        initialize()
     }
 
     protected var mLocation: Point? = null
@@ -88,6 +99,7 @@ abstract class XposedScheduler : AbstractScheduler() {
     private val stepSensors = intArrayOf(Sensor.TYPE_STEP_COUNTER, Sensor.TYPE_STEP_DETECTOR)
 
     private var stepsCount: Int = -1
+
     override suspend fun ServerScope.startStepsEmulation(motion: Box<Motion>, velocity: Double) {
         sensorHooker.toggle = motion.status
 

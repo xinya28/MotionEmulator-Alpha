@@ -9,8 +9,7 @@ jnanoid = "2.0.0"
 crunch = "1.1.2"
 maps-util = "3.4.0"
 maps = "18.2.0"
-yukihook = "1.2.0"
-xposed = "82"
+libxposed = "102.0.0"
 core-ktx = "1.12.0"
 annotation = "1.7.0"
 junit = "4.13.2"
@@ -19,7 +18,6 @@ espresso = "3.5.1"
 ktor = "2.3.4"
 
 [libraries]
-yukihook-ksp = { group = "com.highcapable.yukihookapi", name = "ksp-xposed", version.ref = "yukihook" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-coroutine = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutine" }
 guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
@@ -27,8 +25,7 @@ jnanoid = { group = "com.aventrix.jnanoid", name = "jnanoid", version.ref = "jna
 crunch = { group = "com.github.boxbeam", name = "Crunch", version.ref = "crunch" }
 maps-util = { group = "com.google.maps.android", name = "android-maps-utils", version.ref = "maps-util" }
 maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "maps" }
-yukihook = { group = "com.highcapable.yukihookapi", name = "api", version.ref = "yukihook" }
-xposed = { group = "de.robv.android.xposed", name = "api", version.ref = "xposed" }
+libxposed = { group = "io.github.libxposed", name = "api", version.ref = "libxposed" }
 corektx = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
 annotation = { group = "androidx.annotation", name = "annotation-jvm", version.ref = "annotation" }
 kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }

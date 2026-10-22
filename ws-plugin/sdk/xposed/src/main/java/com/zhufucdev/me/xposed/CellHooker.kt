@@ -2,153 +2,102 @@
 
 package com.zhufucdev.me.xposed
 
-import android.telephony.*
-import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
-import com.highcapable.yukihookapi.hook.factory.classOf
-import com.highcapable.yukihookapi.hook.factory.method
-import com.highcapable.yukihookapi.hook.type.java.IntType
-import com.highcapable.yukihookapi.hook.type.java.UnitType
+import android.telephony.CellInfo
+import android.telephony.CellLocation
+import android.telephony.NeighboringCellInfo
+import android.telephony.PhoneStateListener
+import android.telephony.TelephonyCallback
+import android.telephony.TelephonyManager
 import com.zhufucdev.me.stub.CellMoment
 import com.zhufucdev.me.stub.Toggle
 import java.util.concurrent.Executor
 
-class CellHooker(private val scheduler: XposedScheduler) : YukiBaseHooker() {
+class CellHooker(scheduler: XposedScheduler) : BaseHooker(scheduler) {
     private val listeners = mutableSetOf<(CellMoment) -> Unit>()
 
     var toggle = Toggle.PRESENT
 
-    override fun onHook() {
-        classOf<TelephonyManager>().apply {
-            method {
-                name = "getCellLocation"
-                emptyParam()
-                returnType(classOf<CellLocation>())
-            }
-                .hook {
-                    after {
-                        if (!scheduler.isWorking || toggle == Toggle.NONE)
-                            return@after
-                        result = if (toggle == Toggle.BLOCK)
-                            null
-                        else {
-                            scheduler.cells.cellLocation()
-                        }
-                    }
-                }
-            method {
-                name = "getAllCellInfo"
-                emptyParam()
-                returnType(classOf<List<CellInfo>>())
-            }
-                .hook {
-                    after {
-                        if (!scheduler.isWorking || toggle == Toggle.NONE)
-                            return@after
-                        result =
-                            if (toggle == Toggle.BLOCK)
-                                null
-                            else
-                                scheduler.cells.cell.takeIf { it.isNotEmpty() }
-                    }
-                }
-            method {
-                name = "getNeighboringCellInfo"
-                emptyParam()
-                returnType = classOf<List<NeighboringCellInfo>>()
-            }
-                .hook {
-                    after {
-                        if (!scheduler.isWorking || toggle == Toggle.NONE)
-                            return@after
-                        result =
-                            if (toggle == Toggle.BLOCK) {
-                                null
-                            } else {
-                                scheduler.cells.neighboringInfo().takeIf { it.isNotEmpty() }
-                            }
-                    }
-                }
-            method {
-                name = "listen"
-                param(classOf<PhoneStateListener>(), IntType)
-                returnType = UnitType
-            }
-                .hook {
-                    replaceUnit {
-                        if (!scheduler.isWorking || toggle == Toggle.NONE) {
-                            callOriginal()
-                            return@replaceUnit
-                        }
+    fun hook() {
+        val telephony = TelephonyManager::class.java
 
-                        if (toggle == Toggle.BLOCK)
-                            return@replaceUnit
-
-                        val listener = args(0).cast<PhoneStateListener>()
-                        val mode = args(1).int()
-                        addListener {
-                            listener?.treatWith(it, mode)
-                        }
-                    }
-                }
-
-            method {
-                name = "registerTelephonyCallback"
-                param(classOf<Executor>(), classOf<TelephonyCallback>())
-                returnType = UnitType
+        hook(
+            telephony.methodOrNull("getCellLocation"),
+            after = { args ->
+                if (!scheduler.isWorking || toggle == Toggle.NONE) return@hook
+                args.result = if (toggle == Toggle.BLOCK) null else scheduler.cells.cellLocation()
             }
-                .hook {
-                    replaceUnit {
-                        if (!scheduler.isWorking || toggle == Toggle.NONE) {
-                            callOriginal()
-                            return@replaceUnit
-                        }
+        )
 
-                        if (toggle == Toggle.BLOCK)
-                            return@replaceUnit
-
-                        val executor = args(0).cast<Executor>()
-                        val callback = args(1).cast<TelephonyCallback>()
-                        addListener {
-                            executor?.execute {
-                                callback?.treatWith(scheduler.cells)
-                            }
-                        }
-                    }
-                }
-
-            method {
-                name = "getPhoneCount"
-                emptyParam()
-                returnType = IntType
+        hook(
+            telephony.methodOrNull("getAllCellInfo"),
+            after = { args ->
+                if (!scheduler.isWorking || toggle == Toggle.NONE) return@hook
+                args.result =
+                    if (toggle == Toggle.BLOCK) null
+                    else scheduler.cells.cell.takeIf { it.isNotEmpty() }
             }
-                .hook {
-                    replaceAny {
-                        if (!scheduler.isWorking || toggle == Toggle.NONE) {
-                            callOriginal()
-                        } else if (toggle == Toggle.BLOCK) {
-                            0
-                        } else {
-                            1
-                        }
-                    }
-                }
+        )
 
-            method {
-                name = "getActiveModemCount"
-                emptyParam()
-                returnType = IntType
+        hook(
+            telephony.methodOrNull("getNeighboringCellInfo"),
+            after = { args ->
+                if (!scheduler.isWorking || toggle == Toggle.NONE) return@hook
+                args.result =
+                    if (toggle == Toggle.BLOCK) null
+                    else scheduler.cells.neighboringInfo().takeIf { it.isNotEmpty() }
             }
-                .hook {
-                    replaceAny {
-                        if (!scheduler.isWorking || toggle == Toggle.NONE) {
-                            callOriginal()
-                        } else if (toggle == Toggle.BLOCK) {
-                            0
-                        } else {
-                            1
-                        }
-                    }
+        )
+
+        hookUnit(
+            telephony.methodOrNull("listen", PhoneStateListener::class.java, Int::class.javaPrimitiveType!!)
+        ) { args ->
+            if (!scheduler.isWorking || toggle == Toggle.NONE) {
+                args.proceed()
+                return@hookUnit
+            }
+            if (toggle == Toggle.BLOCK) {
+                return@hookUnit
+            }
+
+            val listener = args.cast<PhoneStateListener>(0)
+            val mode = args.cast<Int>(1) ?: 0
+            addListener {
+                listener?.treatWith(it, mode)
+            }
+        }
+
+        hookUnit(
+            telephony.methodOrNull(
+                "registerTelephonyCallback",
+                Executor::class.java,
+                TelephonyCallback::class.java
+            )
+        ) { args ->
+            if (!scheduler.isWorking || toggle == Toggle.NONE) {
+                args.proceed()
+                return@hookUnit
+            }
+            if (toggle == Toggle.BLOCK) {
+                return@hookUnit
+            }
+
+            val executor = args.cast<Executor>(0)
+            val callback = args.cast<TelephonyCallback>(1)
+            addListener {
+                executor?.execute {
+                    callback?.treatWith(scheduler.cells)
                 }
+            }
+        }
+
+        listOf("getPhoneCount", "getActiveModemCount").forEach { name ->
+            hookReplace(telephony.methodOrNull(name)) { args ->
+                when {
+                    !scheduler.isWorking || toggle == Toggle.NONE -> args.proceed()
+                    toggle == Toggle.BLOCK -> 0
+                    else -> 1
+                }
+            }
         }
     }
 
