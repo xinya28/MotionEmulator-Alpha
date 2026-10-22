@@ -105,7 +105,7 @@ jobs:
         working-directory: ws-plugin
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:assembleRelease
+          ./gradlew --no-daemon --stacktrace :stub:testDebugUnitTest :app:assembleDebug :app:assembleRelease
 
       - name: Collect APKs
         working-directory: ws-plugin
@@ -149,19 +149,24 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
           mkdir -p out
-          # 本体（manager）：debug 变体带 debug 证书，可直接安装
-          cp "dist/motion-emulator-manager-apk/app-universal-debug.apk"    "out/MotionEmulator-${VERSION}-universal-debug.apk"
-          cp "dist/motion-emulator-manager-apk/app-arm64-v8a-debug.apk"    "out/MotionEmulator-${VERSION}-arm64-v8a-debug.apk"
-          cp "dist/motion-emulator-manager-apk/app-armeabi-v7a-debug.apk"  "out/MotionEmulator-${VERSION}-armeabi-v7a-debug.apk"
-          cp "dist/motion-emulator-manager-apk/app-x86_64-debug.apk"       "out/MotionEmulator-${VERSION}-x86_64-debug.apk"
-          # 插件（LSPosed WebSocket module）
-          cp "dist/motion-emulator-websocket-plugin-apk/app-debug.apk"     "out/MotionEmulator-WebsocketPlugin-${PLUGIN_VERSION}-debug.apk"
-          # 源代码
-          git archive --format=zip --prefix="MotionEmulator-${VERSION}/" -o "out/MotionEmulator-${VERSION}-source.zip" HEAD
-          # 校验和
-          ( cd out && sha256sum *.apk *.zip > SHA256SUMS.txt )
+          MANAGER_APK="MotionEmulator-${VERSION}-universal-debug.apk"
+          PLUGIN_APK="MotionEmulator-WebsocketPlugin-${PLUGIN_VERSION}-universal-debug.apk"
+
+          # 本体（manager）：只发布 universal（全 ABI，debug 签名可直接安装）
+          cp "dist/motion-emulator-manager-apk/app-universal-debug.apk" "out/${MANAGER_APK}"
+          # 插件：ABI splits 后同样只发布 universal；没有 splits 时回退到单一 APK
+          if [ -f "dist/motion-emulator-websocket-plugin-apk/app-universal-debug.apk" ]; then
+            cp "dist/motion-emulator-websocket-plugin-apk/app-universal-debug.apk" "out/${PLUGIN_APK}"
+          else
+            cp "dist/motion-emulator-websocket-plugin-apk/app-debug.apk" "out/${PLUGIN_APK}"
+          fi
+
           ls -lh out
-          cat out/SHA256SUMS.txt
+          # 校验和直接写进 release 说明，不再作为 assets 上传
+          echo "MANAGER_APK=${MANAGER_APK}" >> "$GITHUB_ENV"
+          echo "PLUGIN_APK=${PLUGIN_APK}" >> "$GITHUB_ENV"
+          echo "MANAGER_SHA=$(sha256sum "out/${MANAGER_APK}" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "PLUGIN_SHA=$(sha256sum "out/${PLUGIN_APK}" | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
       - name: Write release notes
         run: |
@@ -173,27 +178,24 @@ jobs:
 
           ## 下载
 
-          | 文件 | 说明 |
-          | --- | --- |
-          | \`MotionEmulator-${VERSION}-universal-debug.apk\` | 本体，全 ABI（arm64 / armv7 / x86_64），debug 签名，可直接安装 |
-          | \`MotionEmulator-${VERSION}-arm64-v8a-debug.apk\` | 本体，arm64 手机专用，体积更小 |
-          | \`MotionEmulator-${VERSION}-armeabi-v7a-debug.apk\` | 本体，32 位 ARM 设备 |
-          | \`MotionEmulator-${VERSION}-x86_64-debug.apk\` | 本体，模拟器 / x86_64 |
-          | \`MotionEmulator-WebsocketPlugin-${PLUGIN_VERSION}-debug.apk\` | 插件（LSPosed 模块），配合本体使用 |
-          | \`MotionEmulator-${VERSION}-source.zip\` | 源代码快照（同一提交） |
-          | \`SHA256SUMS.txt\` | 以上所有文件的 SHA-256 校验和 |
+          | 文件 | 说明 | SHA-256 |
+          | --- | --- | --- |
+          | \`${MANAGER_APK}\` | 本体，universal（arm64 / armv7 / x86_64），debug 签名，可直接安装 | \`${MANAGER_SHA}\` |
+          | \`${PLUGIN_APK}\` | 插件（LSPosed 模块），universal，配合本体使用 | \`${PLUGIN_SHA}\` |
 
-          GitHub 还会为本 tag 自动附加 \`Source code (zip)\` 与 \`Source code (tar.gz)\`。
+          GitHub 会为本 tag 自动附加源代码包（Source code (zip) / Source code (tar.gz)），无需额外上传。
 
           ## 校验
 
           \`\`\`bash
-          sha256sum -c SHA256SUMS.txt
+          sha256sum "${MANAGER_APK}"   # ${MANAGER_SHA}
+          sha256sum "${PLUGIN_APK}"    # ${PLUGIN_SHA}
           \`\`\`
 
           ## 说明
 
           - 本体为 **debug 签名**（便于直接安装）；README 建议的 release 变体未签名，可在本次构建的 Actions artifacts 中获取后自行签名。
+          - 分架构版本（arm64-v8a / armeabi-v7a / x86_64 及未签名 release）只作为 Actions artifacts 保留，不进入 release。
           - 本体与插件需配套使用：插件用于修复多监听者定位派发时速度出现 NaN 的问题。
           EOF
           cat notes.md
@@ -205,12 +207,12 @@ jobs:
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "Release $TAG already exists, updating assets"
-            gh release upload "$TAG" out/*.apk out/*.zip out/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" "out/${MANAGER_APK}" "out/${PLUGIN_APK}" --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
               --title "MotionEmulator ${VERSION} (build #${GITHUB_RUN_NUMBER})" \
               --notes-file notes.md --latest
           else
-            gh release create "$TAG" out/*.apk out/*.zip out/SHA256SUMS.txt \
+            gh release create "$TAG" "out/${MANAGER_APK}" "out/${PLUGIN_APK}" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "MotionEmulator ${VERSION} (build #${GITHUB_RUN_NUMBER})" \

@@ -15,6 +15,17 @@ android {
         versionName = "1.2.4"
     }
     buildFeatures { buildConfig = true }
+    // Same multi-ABI packaging as the manager app: per-ABI APKs plus a universal one.
+    // The plugin itself is pure Kotlin today, so the universal APK is what the release ships,
+    // while per-ABI splits stay available as CI artifacts for devices/JNI later on.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
