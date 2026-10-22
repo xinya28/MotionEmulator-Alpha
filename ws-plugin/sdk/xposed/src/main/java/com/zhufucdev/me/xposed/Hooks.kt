@@ -98,13 +98,15 @@ abstract class BaseHooker(protected val scheduler: XposedScheduler) {
     }
 
     protected fun Class<*>.methodOrNull(name: String, vararg params: Class<*>): Method? {
-        var clazz: Class<*>? = this
-        while (clazz != null) {
-            runCatching { clazz.getDeclaredMethod(name, *params) }.getOrNull()?.let {
-                runCatching { it.isAccessible = true }
-                return it
+        var current: Class<*>? = this
+        while (current != null) {
+            val clazz = current
+            val found = runCatching { clazz.getDeclaredMethod(name, *params) }.getOrNull()
+            if (found != null) {
+                runCatching { found.isAccessible = true }
+                return found
             }
-            clazz = clazz.superclass
+            current = clazz.superclass
         }
         return null
     }

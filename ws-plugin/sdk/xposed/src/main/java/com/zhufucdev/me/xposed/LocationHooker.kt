@@ -30,6 +30,7 @@ import java.util.concurrent.Executor
 import java.util.function.Consumer
 import kotlin.concurrent.timer
 import kotlin.random.Random
+import kotlin.reflect.jvm.isAccessible
 
 class LocationHooker(scheduler: XposedScheduler) : BaseHooker(scheduler) {
     private val locations = LocationDispatcher(SystemClock::elapsedRealtimeNanos, ::estimateDistance)
@@ -296,7 +297,10 @@ class LocationHooker(scheduler: XposedScheduler) : BaseHooker(scheduler) {
 
             hook(
                 clientClass.methodOrNull("setLocationOption", optionClass),
-                before = { args -> options.set(args.thisObject, args[0]) }
+                before = { args ->
+                    val client = args.thisObject ?: return@hook
+                    options.set(client, args[0])
+                }
             )
 
             hookReplace(clientClass.methodOrNull("setLocationListener", listenerClass)) { args ->

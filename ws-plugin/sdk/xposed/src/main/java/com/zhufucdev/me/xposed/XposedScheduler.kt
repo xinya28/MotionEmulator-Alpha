@@ -41,7 +41,7 @@ abstract class XposedScheduler : AbstractScheduler() {
         get() = if (::packageParam.isInitialized) packageParam.packageName
         else throw IllegalStateException("Not initialized")
 
-    val classLoader: ClassLoader get() = packageParam.classLoader
+    val classLoader: ClassLoader get() = packageParam.defaultClassLoader
 
     open val tag: String get() = "MotionEmulator"
 
