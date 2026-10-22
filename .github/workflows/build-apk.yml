@@ -1,4 +1,4 @@
-name: Build APK
+﻿name: Build APK
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ on:
       - 'app/**'
       - 'manager-stub/**'
       - 'manager-update/**'
+      - 'ws-plugin/**'
       - 'buildSrc/**'
       - 'gradle/**'
       - '*.gradle.kts'
@@ -18,6 +19,7 @@ on:
       - 'app/**'
       - 'manager-stub/**'
       - 'manager-update/**'
+      - 'ws-plugin/**'
       - 'buildSrc/**'
       - 'gradle/**'
       - '*.gradle.kts'
@@ -152,9 +154,9 @@ jobs:
           MANAGER_APK="MotionEmulator-${VERSION}-universal-debug.apk"
           PLUGIN_APK="MotionEmulator-WebsocketPlugin-${PLUGIN_VERSION}-universal-debug.apk"
 
-          # 本体（manager）：只发布 universal（全 ABI，debug 签名可直接安装）
+          # 鏈綋锛坢anager锛夛細鍙彂甯?universal锛堝叏 ABI锛宒ebug 绛惧悕鍙洿鎺ュ畨瑁咃級
           cp "dist/motion-emulator-manager-apk/app-universal-debug.apk" "out/${MANAGER_APK}"
-          # 插件：ABI splits 后同样只发布 universal；没有 splits 时回退到单一 APK
+          # 鎻掍欢锛欰BI splits 鍚庡悓鏍峰彧鍙戝竷 universal锛涙病鏈?splits 鏃跺洖閫€鍒板崟涓€ APK
           if [ -f "dist/motion-emulator-websocket-plugin-apk/app-universal-debug.apk" ]; then
             cp "dist/motion-emulator-websocket-plugin-apk/app-universal-debug.apk" "out/${PLUGIN_APK}"
           else
@@ -162,7 +164,7 @@ jobs:
           fi
 
           ls -lh out
-          # 校验和直接写进 release 说明，不再作为 assets 上传
+          # 鏍￠獙鍜岀洿鎺ュ啓杩?release 璇存槑锛屼笉鍐嶄綔涓?assets 涓婁紶
           echo "MANAGER_APK=${MANAGER_APK}" >> "$GITHUB_ENV"
           echo "PLUGIN_APK=${PLUGIN_APK}" >> "$GITHUB_ENV"
           echo "MANAGER_SHA=$(sha256sum "out/${MANAGER_APK}" | cut -d' ' -f1)" >> "$GITHUB_ENV"
@@ -172,32 +174,28 @@ jobs:
         run: |
           set -euo pipefail
           cat > notes.md <<EOF
-          **MotionEmulator ${VERSION}** · build #${GITHUB_RUN_NUMBER}
+          **MotionEmulator ${VERSION}** 路 build #${GITHUB_RUN_NUMBER}
 
-          提交 \`${GITHUB_SHA}\` · [构建日志](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
+          鎻愪氦 \`${GITHUB_SHA}\` 路 [鏋勫缓鏃ュ織](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
 
-          ## 下载
+          ## 涓嬭浇
 
-          | 文件 | 说明 | SHA-256 |
+          | 鏂囦欢 | 璇存槑 | SHA-256 |
           | --- | --- | --- |
-          | \`${MANAGER_APK}\` | 本体，universal（arm64 / armv7 / x86_64），debug 签名，可直接安装 | \`${MANAGER_SHA}\` |
-          | \`${PLUGIN_APK}\` | 插件（LSPosed 模块），universal，配合本体使用 | \`${PLUGIN_SHA}\` |
+          | \`${MANAGER_APK}\` | 鏈綋锛寀niversal锛坅rm64 / armv7 / x86_64锛夛紝debug 绛惧悕锛屽彲鐩存帴瀹夎 | \`${MANAGER_SHA}\` |
+          | \`${PLUGIN_APK}\` | 鎻掍欢锛圠SPosed 妯″潡锛夛紝universal锛岄厤鍚堟湰浣撲娇鐢?| \`${PLUGIN_SHA}\` |
 
-          GitHub 会为本 tag 自动附加源代码包（Source code (zip) / Source code (tar.gz)），无需额外上传。
-
-          ## 校验
+          GitHub 浼氫负鏈?tag 鑷姩闄勫姞婧愪唬鐮佸寘锛圫ource code (zip) / Source code (tar.gz)锛夛紝鏃犻渶棰濆涓婁紶銆?
+          ## 鏍￠獙
 
           \`\`\`bash
           sha256sum "${MANAGER_APK}"   # ${MANAGER_SHA}
           sha256sum "${PLUGIN_APK}"    # ${PLUGIN_SHA}
           \`\`\`
 
-          ## 说明
+          ## 璇存槑
 
-          - 本体为 **debug 签名**（便于直接安装）；README 建议的 release 变体未签名，可在本次构建的 Actions artifacts 中获取后自行签名。
-          - 分架构版本（arm64-v8a / armeabi-v7a / x86_64 及未签名 release）只作为 Actions artifacts 保留，不进入 release。
-          - 本体与插件需配套使用：插件用于修复多监听者定位派发时速度出现 NaN 的问题。
-          EOF
+          - 鏈綋涓?**debug 绛惧悕**锛堜究浜庣洿鎺ュ畨瑁咃級锛汻EADME 寤鸿鐨?release 鍙樹綋鏈鍚嶏紝鍙湪鏈鏋勫缓鐨?Actions artifacts 涓幏鍙栧悗鑷绛惧悕銆?          - 鍒嗘灦鏋勭増鏈紙arm64-v8a / armeabi-v7a / x86_64 鍙婃湭绛惧悕 release锛夊彧浣滀负 Actions artifacts 淇濈暀锛屼笉杩涘叆 release銆?          - 鏈綋涓庢彃浠堕渶閰嶅浣跨敤锛氭彃浠剁敤浜庝慨澶嶅鐩戝惉鑰呭畾浣嶆淳鍙戞椂閫熷害鍑虹幇 NaN 鐨勯棶棰樸€?          EOF
           cat notes.md
 
       - name: Create GitHub release
