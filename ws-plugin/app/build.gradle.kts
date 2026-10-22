@@ -10,8 +10,8 @@ android {
         applicationId = "com.zhufucdev.ws_plugin"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.2.4"
+        versionCode = 6
+        versionName = "1.2.5-api102"
     }
     buildFeatures { buildConfig = true }
     // Same multi-ABI packaging as the manager app: per-ABI APKs plus a universal one.
