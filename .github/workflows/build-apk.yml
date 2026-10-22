@@ -59,6 +59,17 @@ jobs:
             "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" "platform-tools"
           fi
 
+      - name: Configure map keys (optional)
+        env:
+          AMAP_SDK_KEY: ${{ secrets.AMAP_SDK_KEY }}
+          GCP_MAPS_KEY: ${{ secrets.GCP_MAPS_KEY }}
+        run: |
+          set -e
+          : > local.properties
+          if [ -n "${AMAP_SDK_KEY:-}" ]; then echo "AMAP_SDK_KEY=$AMAP_SDK_KEY" >> local.properties; fi
+          if [ -n "${GCP_MAPS_KEY:-}" ]; then echo "GCP_MAPS_KEY=$GCP_MAPS_KEY" >> local.properties; fi
+          cat local.properties
+
       - name: Build manager APKs
         run: |
           chmod +x gradlew
