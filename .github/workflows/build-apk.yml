@@ -197,6 +197,8 @@ jobs:
           ## 说明
 
           - 本体为 **debug 签名**（便于直接安装）；README 建议的 release 变体未签名，可在本次构建的 Actions artifacts 中获取后自行签名。
+          - 分架构版本（arm64-v8a / armeabi-v7a / x86_64 及未签名 release）只作为 Actions artifacts 保留，不进入 release。
+          - 本体与插件需配套使用：插件用于修复多监听者定位派发时速度出现 NaN 的问题。
           EOF
           cat notes.md
 
