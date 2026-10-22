@@ -23,3 +23,6 @@ local.properties
 /*/release/
 /*/src/main/resources/META-INF/yukihookapi_init
 /*/src/main/assets/xposed_init
+
+# IDE
+.idea/
