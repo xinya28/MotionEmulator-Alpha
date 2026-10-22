@@ -77,11 +77,11 @@ class BridgePrefs(private val module: XposedModule) {
         runCatching { module.getRemotePreferences(PREFERENCE_NAME_BRIDGE) }.getOrNull()
     }
 
-    fun getInt(key: String, def: Int): Int = runCatching { remote?.getInt(key, def) }.getOrDefault(def)
+    fun getInt(key: String, def: Int): Int = runCatching { remote?.getInt(key, def) }.getOrNull() ?: def
 
     fun getBoolean(key: String, def: Boolean): Boolean =
-        runCatching { remote?.getBoolean(key, def) }.getOrDefault(def)
+        runCatching { remote?.getBoolean(key, def) }.getOrNull() ?: def
 
     fun getString(key: String, def: String): String =
-        runCatching { remote?.getString(key, def) }.getOrDefault(def)
+        runCatching { remote?.getString(key, def) }.getOrNull() ?: def
 }

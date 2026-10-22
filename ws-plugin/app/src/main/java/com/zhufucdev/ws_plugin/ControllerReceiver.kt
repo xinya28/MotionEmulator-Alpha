@@ -1,10 +1,10 @@
 package com.zhufucdev.ws_plugin
 
 import android.content.Context
+import androidx.core.content.edit
 import com.zhufucdev.me.plugin.MePlugin
 import com.zhufucdev.me.plugin.PluginBroadcastReceiver
 import com.zhufucdev.me.xposed.PREFERENCE_NAME_BRIDGE
-import android.content.Context
 
 class ControllerReceiver : PluginBroadcastReceiver() {
     override fun onEmulationStart(context: Context) {
